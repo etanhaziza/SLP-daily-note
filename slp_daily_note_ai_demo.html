@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SLP 92507 Daily Note — Modern Voice + AI (Auto-Generate)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#0b0d12; --card:#121621; --fg:#e9ecf1; --muted:#9aa3b2; --line:#1f2633;
+    --acc:#6aa5ff; --danger:#ff6a6a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b0d12,#0d1117 40%,#0b0d12);color:var(--fg);
+       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
+  .wrap{max-width:960px;margin:32px auto;padding:0 20px}
+  h1{font-size:1.35rem;margin:0 0 6px}
+  p.muted{color:var(--muted);margin:0 0 18px}
+  .card{background:rgba(18,22,33,.9); border:1px solid var(--line); border-radius:16px; padding:18px; margin:14px 0; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  label{font-weight:600; font-size:.95rem}
+  input,select,textarea,button{
+    border:1px solid var(--line); background:#0e1420; color:var(--fg);
+    border-radius:12px; padding:12px; outline:none;
+  }
+  input::placeholder, textarea::placeholder{color:#62708a}
+  textarea{width:100%; min-height:150px; resize:vertical}
+  button{cursor:pointer; border:1px solid #2a3344; background:linear-gradient(180deg,#1a2233,#151c2b); }
+  button.primary{border-color:#3b75ff; background:linear-gradient(180deg,#2b5cff,#1f3fb3);}
+  button:disabled{opacity:.6; cursor:not-allowed}
+  .pill{display:inline-block; padding:4px 10px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted)}
+  .ok{color:#9cffba} .err{color:var(--danger)}
+  .tiny{font-size:.85rem; color:var(--muted)}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:760px){ .grid{grid-template-columns:1fr} }
+  /* Siri-like orb */
+  .orb{ width:56px; height:56px; border-radius:50%;
+    background: radial-gradient(120% 120% at 30% 30%, var(--acc), #7ae6ff 35%, #6b6bff 60%, #ab6bff 90%);
+    box-shadow:0 0 30px rgba(106,165,255,.6), inset 0 0 20px rgba(255,255,255,.2);
+    position:relative; margin:6px auto 10px; transform:translateZ(0);}
+  .ring{position:absolute; inset:-6px; border-radius:50%; border:2px solid rgba(152,255,208,.2); filter:blur(.5px)}
+  .orb.speaking{animation:pulseSpeak 1.4s ease-in-out infinite;}
+  .orb.listening{animation:pulseListen 1s ease-in-out infinite;}
+  @keyframes pulseSpeak { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
+  @keyframes pulseListen { 0%{box-shadow:0 0 18px rgba(152,255,208,.5)} 50%{box-shadow:0 0 34px rgba(152,255,208,.9)} 100%{box-shadow:0 0 18px rgba(152,255,208,.5)} }
+  .center{text-align:center}
+  .stack{display:flex; flex-direction:column; gap:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SLP Daily Note — Modern Voice Interview (Local Prototype)</h1>
+  <p class="muted">One-paragraph <b>92507</b> note • Voice prompts + speech recognition • For <b>fake patients only</b>. No data saved.</p>
+
+  <div class="card">
+    <div class="grid">
+      <label>OpenAI API Key
+        <input id="apiKey" type="password" placeholder="sk-..." />
+      </label>
+      <label>Model
+        <select id="model">
+          <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+        </select>
+      </label>
+      <label>Voice (browser TTS)
+        <select id="voiceSelect"><option>Loading voices…</option></select>
+      </label>
+      <label>Speech Rate
+        <input id="rate" type="number" step="0.05" min="0.6" max="1.3" value="0.95" />
+      </label>
+    </div>
+    <p class="tiny">Your key stays in-memory for this page only (testing). To persist mic permission, serve via <code>http://localhost</code> and click Allow once.</p>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <div class="stack">
+        <div class="row">
+          <button id="startBtn" class="primary">Start Interview</button>
+          <button id="stopBtn" disabled>Stop</button>
+          <span id="state" class="pill">idle</span>
+        </div>
+        <div class="row">
+          <label>Minutes <input id="minutes" type="number" min="1" max="120" placeholder="e.g., 25" style="width:110px"></label>
+          <label>CPT <input id="cpt" type="text" value="92507" style="width:110px"></label>
+        </div>
+      </div>
+      <div class="center" style="width:120px">
+        <div class="orb" id="orb"><div class="ring"></div></div>
+        <div id="orbLabel" class="tiny">ready</div>
+      </div>
+    </div>
+    <div class="stack" style="margin-top:10px">
+      <label>Session Bullets (you can also type minimal info)</label>
+      <textarea id="bullets" placeholder="- STM exercise 70% independently/100% w mod cues
+- Problem solving 50% independently/100% w max cues
+- Education: external memory aids
+- Rationale: skilled cueing for strategy acquisition
+- Next: fade cues; generalize to ADLs"></textarea>
+    </div>
+    <p class="tiny">Workflow: Click <b>Start Interview</b> → you’ll <b>hear</b> each question → speak your answer → it advances → at the end say “yes” to auto-generate.</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="genBtn" class="primary">Generate with AI</button>
+      <button id="copyBtn" disabled>Copy Note</button>
+      <span id="aiStatus" class="pill">waiting</span>
+    </div>
+    <div class="stack" style="margin-top:10px">
+      <label>One-Paragraph 92507 Note</label>
+      <textarea id="noteOut" placeholder="Will appear here after generation…"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Voice list (browser TTS)
+   ========================= */
+const voiceSelect = document.getElementById('voiceSelect');
+let VOICES = [];
+function loadVoices(){
+  VOICES = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = "";
+  VOICES.forEach((v,i)=>{
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.lang})${v.default ? " — default":""}`;
+    voiceSelect.appendChild(opt);
+  });
+  if(!VOICES.length){
+    const opt = document.createElement('option');
+    opt.textContent = "No voices found";
+    voiceSelect.appendChild(opt);
+  }
+}
+loadVoices();
+if (typeof speechSynthesis !== 'undefined') {
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+/* =========================
+   UI elements
+   ========================= */
+const stateEl = document.getElementById("state");
+const orb = document.getElementById("orb");
+const orbLabel = document.getElementById("orbLabel");
+const startBtn = document.getElementById("startBtn");
+const stopBtn  = document.getElementById("stopBtn");
+const bulletsEl= document.getElementById("bullets");
+const minutesEl= document.getElementById("minutes");
+const cptEl    = document.getElementById("cpt");
+const genBtn   = document.getElementById("genBtn");
+const copyBtn  = document.getElementById("copyBtn");
+const noteOut  = document.getElementById("noteOut");
+const aiStatus = document.getElementById("aiStatus");
+const apiKeyEl = document.getElementById("apiKey");
+const modelEl  = document.getElementById("model");
+const rateEl   = document.getElementById("rate");
+
+/* =========================
+   Interview flow
+   ========================= */
+const QUESTIONS = [
+  "Subjective: how did the patient present today? Any patient or staff report?",
+  "Objective item one: describe the task and performance, including independent percent, with-cues percent, and cue level.",
+  "Objective item two: any second task and the same details?",
+  "Education and strategies provided: what did you teach or model for the patient or staff?",
+  "Clinical rationale: in one sentence, why is skilled speech therapy required today?",
+  "Plan for next session: what will you focus on next time?",
+  "Are you ready to generate the note now? Please say yes or no."
+];
+let answers = new Array(QUESTIONS.length).fill("");
+let idx = 0;
+
+/* Orb states */
+function setSpeaking(on){
+  orb.classList.toggle("speaking", on);
+  if(on){ orbLabel.textContent = "speaking"; stateEl.textContent = "speaking"; }
+}
+function setListening(on){
+  orb.classList.toggle("listening", on);
+  if(on){ orbLabel.textContent = "listening"; stateEl.textContent = "listening"; }
+}
+function setIdle(){
+  orb.classList.remove("speaking","listening");
+  orbLabel.textContent = "ready";
+  stateEl.textContent = "idle";
+}
+
+/* Text-to-Speech with selected voice */
+function speak(text, onend){
+  setListening(false);
+  setSpeaking(true);
+  const utter = new SpeechSynthesisUtterance(text);
+  const sel = VOICES.find(v => v.name === voiceSelect.value);
+  if(sel) utter.voice = sel;
+  utter.rate = Math.min(Math.max(parseFloat(rateEl.value||"0.95"), 0.6), 1.3);
+  utter.onend = ()=>{ setSpeaking(false); if(onend) onend(); };
+  try{ speechSynthesis.cancel(); }catch(e){}
+  speechSynthesis.speak(utter);
+}
+
+/* Speech recognition */
+let rec;
+if('webkitSpeechRecognition' in window){
+  rec = new webkitSpeechRecognition();
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+  let finalText = "";
+  rec.onresult = (e)=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const chunk = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText += chunk + " ";
+    }
+  };
+  rec.onstart = ()=> setListening(true);
+  rec.onend = ()=>{
+    setListening(false);
+    const text = finalText.trim();
+    finalText = "";
+    if(!text){
+      speak("I didn't catch that. Let's try again.", askNext);
+      return;
+    }
+    answers[idx] = text;
+    /* If final confirmation, auto-generate on "yes" */
+    if(idx === QUESTIONS.length - 1){
+      const t = text.toLowerCase();
+      if(t.includes("yes")){
+        speak("Generating your note now.", ()=> {
+          setIdle();
+          autoGenerate(); // <-- AUTO-GENERATE here
+        });
+        return;
+      } else {
+        speak("Okay, we will not generate yet. You can press Start Interview again when you are ready.", ()=> setIdle());
+        return;
+      }
+    }
+    idx++;
+    if(idx < QUESTIONS.length){ askNext(); }
+    else { setIdle(); }
+  };
+} else {
+  startBtn.disabled = true; stopBtn.disabled = true;
+  stateEl.textContent = "no speech support";
+  orbLabel.textContent = "unsupported";
+}
+
+function askNext(){
+  const q = QUESTIONS[idx];
+  speak(q, ()=>{ if(rec){ rec.start(); }});
+}
+
+startBtn.addEventListener("click", ()=>{
+  answers = new Array(QUESTIONS.length).fill("");
+  idx = 0;
+  askNext();
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+});
+
+stopBtn.addEventListener("click", ()=>{
+  try{ if(rec) rec.stop(); }catch(e){}
+  speechSynthesis.cancel();
+  setIdle();
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+});
+
+/* =========================
+   OpenAI call (one paragraph)
+   ========================= */
+async function callOpenAI({apiKey, model, minutes, cpt, bullets}){
+  const system = `You are an SLP documentation assistant.
+Write ONE PARAGRAPH for a daily treatment note for CPT ${cpt}.
+- Blend Subjective, Objective, Assessment, Plan into a single flowing paragraph (no headings, no lists).
+- Include minutes and CPT inline.
+- Convert terse bullets into eloquent clinical language with professional, audit-ready tone.
+- Include cue levels and performance (independent % and with-cues %).
+- Include skilled intervention/clinical rationale and next-session focus.
+- No PHI. Keep to ~5–7 sentences.`;
+
+  const fewShotUser = `Example minimal input:
+minutes: 25, CPT: 92507
+bullets:
+STM exercise 70% independently/100% w mod cues`;
+  const fewShotAssistant =
+    `SLP provided 25 minutes (92507) of skilled speech-language intervention targeting short-term memory. The patient completed a therapist-facilitated STM task at 70% independence, improving to 100% with moderate verbal cueing throughout the activity. Skilled services focused on modeling and shaping compensatory strategies, graded cueing, and paced rehearsal to enhance accuracy and carryover. Patient showed improved performance with supports but reduced independence persists, indicating continued need for skilled intervention to promote generalization across functional contexts. Next session will emphasize cue fading and application of memory strategies within daily tasks to build independent recall.`;
+
+  const user = JSON.stringify({ minutes, cpt, bullets });
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method:"POST",
+    headers:{ "Authorization":`Bearer ${apiKey}`, "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model, temperature:0.2,
+      messages:[
+        {role:"system", content:system},
+        {role:"user", content:fewShotUser},
+        {role:"assistant", content:fewShotAssistant},
+        {role:"user", content:`Generate the one-paragraph 92507 note from this JSON:\n${user}`}
+      ]
+    })
+  });
+  if(!resp.ok){
+    const t = await resp.text();
+    throw new Error(`OpenAI API error (${resp.status}): ${t}`);
+  }
+  const data = await resp.json();
+  return (data.choices?.[0]?.message?.content || "").trim().replace(/\n+/g," ");
+}
+
+/* Build bullets from interview answers and generate */
+async function autoGenerate(){
+  const apiKey = apiKeyEl.value.trim();
+  if(!apiKey){ alert("Paste your OpenAI API key first."); return; }
+  const model = modelEl.value;
+  const minutes = (minutesEl.value||"").trim();
+  const cpt = (cptEl.value||"92507").trim();
+
+  // Consolidate interview answers (skip final yes/no)
+  const usable = answers.slice(0, QUESTIONS.length - 1).filter(Boolean);
+  const combined = usable.join("\n");
+  // Also merge with anything already typed in the bullets box
+  const bullets = [bulletsEl.value.trim(), combined].filter(Boolean).join("\n");
+
+  aiStatus.textContent = "generating…"; aiStatus.classList.remove("err","ok");
+  genBtn.disabled = true;
+
+  try{
+    let text = await callOpenAI({ apiKey, model, minutes, cpt, bullets });
+    // Ensure minutes/CPT are present
+    const missingMin = minutes && !new RegExp(`${minutes}\\s*minute`).test(text);
+    const missingCPT = cpt && !text.includes(cpt);
+    if(missingMin || missingCPT){
+      const prefix = `${minutes ? minutes + " minutes " : ""}${cpt ? "(" + cpt + ")" : ""}`.trim();
+      if(prefix) text = `${prefix}. ${text}`;
+    }
+    noteOut.value = text.trim();
+    copyBtn.disabled = false;
+    aiStatus.textContent = "done"; aiStatus.classList.add("ok");
+    // Re-enable Start
+    startBtn.disabled = false; stopBtn.disabled = true; setIdle();
+  } catch(e){
+    aiStatus.textContent = "error"; aiStatus.classList.add("err");
+    alert(e.message);
+    startBtn.disabled = false; stopBtn.disabled = true; setIdle();
+  } finally {
+    genBtn.disabled = false;
+  }
+}
+
+/* Manual generate button (still available) */
+genBtn.addEventListener("click", autoGenerate);
+
+/* Copy */
+copyBtn.addEventListener("click", ()=>{
+  noteOut.select(); document.execCommand("copy");
+  copyBtn.textContent = "Copied!";
+  setTimeout(()=> copyBtn.textContent="Copy Note", 1200);
+});
+</script>
+</body>
+</html>
